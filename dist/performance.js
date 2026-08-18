@@ -29,6 +29,7 @@
  * misleadingly confident 0.00%.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_MAX_ABS_RETURN_PCT = void 0;
 exports.rootTicker = rootTicker;
 exports.isoDaysAgo = isoDaysAgo;
 exports.nearestOnOrBefore = nearestOnOrBefore;
@@ -91,19 +92,38 @@ function priceAt(series, target, maxGapDays) {
     return { price: (_a = series.byDate.get(d)) !== null && _a !== void 0 ? _a : null, date: d };
 }
 /**
- * Percentage return from `hist` to `cur`. Returns null when either price
- * is missing, when `hist` is zero, or when `cur`/`hist` resolved to the
- * exact same underlying date row (see module docstring) — a textually
- * different date with a coincidentally identical close_price still
- * returns a real 0, since that's an actual (if unusual) zero-movement
- * day, not a resolution collision.
+ * A single-listed-equity return whose magnitude exceeds this is far more
+ * likely to be bad data (wrong-ticker collision, a decimal/unit mismatch,
+ * a stray placeholder price) than a real move — even the most extreme
+ * real single-day/week/month/YTD swings for a live, liquid listing don't
+ * get near 50x. Confirmed against production data: 2026-08-18, vega-fms's
+ * Rebalance tab showed Rheinmetall (RHM) 1D% = +106,293%, traced to
+ * instrument_prices having exactly one row for ticker "RHM" (2026-08-12,
+ * close_price 1.145) — a wrong-instrument price fetched under a bad
+ * Yahoo ticker resolution, sitting just inside the 1D leg's gap
+ * tolerance. That underlying data bug is a separate, upstream fix; this
+ * bound exists so a bug LIKE it can never render as a confidently wrong
+ * number again, regardless of which upstream process caused it.
  */
-function calcRet(cur, curDate, hist, histDate) {
+exports.DEFAULT_MAX_ABS_RETURN_PCT = 5000;
+/**
+ * Percentage return from `hist` to `cur`. Returns null when either price
+ * is missing, when `hist` is zero, when `cur`/`hist` resolved to the
+ * exact same underlying date row (see module docstring — a textually
+ * different date with a coincidentally identical close_price still
+ * returns a real 0, since that's an actual, if unusual, zero-movement
+ * day, not a resolution collision), or when the computed magnitude
+ * exceeds `maxAbsPct` (see DEFAULT_MAX_ABS_RETURN_PCT above).
+ */
+function calcRet(cur, curDate, hist, histDate, maxAbsPct = exports.DEFAULT_MAX_ABS_RETURN_PCT) {
     if (cur == null || hist == null || hist === 0)
         return null;
     if (curDate != null && histDate != null && curDate === histDate)
         return null;
-    return ((cur - hist) / hist) * 100;
+    const pct = ((cur - hist) / hist) * 100;
+    if (Math.abs(pct) > maxAbsPct)
+        return null;
+    return pct;
 }
 /**
  * Build a per-ticker { sorted dates, date->close_price } index from raw
@@ -142,16 +162,18 @@ function buildPriceIndex(rows) {
  * vega-pms source-mismatch bug this module also closes off.
  */
 function computeReturnPeriods(series, cfg) {
+    var _a;
     const cur = priceAt(series, cfg.today, cfg.curMaxGapDays);
     const d1 = priceAt(series, isoDaysAgo(cfg.today, 1), cfg.d1MaxGapDays);
     const d7 = priceAt(series, isoDaysAgo(cfg.today, 7), cfg.d7MaxGapDays);
     const d1m = priceAt(series, isoDaysAgo(cfg.today, 30), cfg.d1mMaxGapDays);
     const ytdTarget = `${new Date(cfg.today).getFullYear()}-01-01`;
     const ytd = priceAt(series, ytdTarget, cfg.ytdMaxGapDays);
+    const maxAbsPct = (_a = cfg.maxAbsReturnPct) !== null && _a !== void 0 ? _a : exports.DEFAULT_MAX_ABS_RETURN_PCT;
     return {
-        perf_1d: calcRet(cur.price, cur.date, d1.price, d1.date),
-        perf_7d: calcRet(cur.price, cur.date, d7.price, d7.date),
-        perf_1m: calcRet(cur.price, cur.date, d1m.price, d1m.date),
-        perf_ytd: calcRet(cur.price, cur.date, ytd.price, ytd.date),
+        perf_1d: calcRet(cur.price, cur.date, d1.price, d1.date, maxAbsPct),
+        perf_7d: calcRet(cur.price, cur.date, d7.price, d7.date, maxAbsPct),
+        perf_1m: calcRet(cur.price, cur.date, d1m.price, d1m.date, maxAbsPct),
+        perf_ytd: calcRet(cur.price, cur.date, ytd.price, ytd.date, maxAbsPct),
     };
 }

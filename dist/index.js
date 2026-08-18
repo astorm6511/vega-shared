@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.computeReturnPeriods = exports.buildPriceIndex = exports.calcRet = exports.priceAt = exports.nearestOnOrBefore = exports.isoDaysAgo = exports.rootTicker = void 0;
+exports.DEFAULT_MAX_ABS_RETURN_PCT = exports.computeReturnPeriods = exports.buildPriceIndex = exports.calcRet = exports.priceAt = exports.nearestOnOrBefore = exports.isoDaysAgo = exports.rootTicker = void 0;
 var performance_1 = require("./performance");
 Object.defineProperty(exports, "rootTicker", { enumerable: true, get: function () { return performance_1.rootTicker; } });
 Object.defineProperty(exports, "isoDaysAgo", { enumerable: true, get: function () { return performance_1.isoDaysAgo; } });
@@ -9,3 +9,4 @@ Object.defineProperty(exports, "priceAt", { enumerable: true, get: function () {
 Object.defineProperty(exports, "calcRet", { enumerable: true, get: function () { return performance_1.calcRet; } });
 Object.defineProperty(exports, "buildPriceIndex", { enumerable: true, get: function () { return performance_1.buildPriceIndex; } });
 Object.defineProperty(exports, "computeReturnPeriods", { enumerable: true, get: function () { return performance_1.computeReturnPeriods; } });
+Object.defineProperty(exports, "DEFAULT_MAX_ABS_RETURN_PCT", { enumerable: true, get: function () { return performance_1.DEFAULT_MAX_ABS_RETURN_PCT; } });

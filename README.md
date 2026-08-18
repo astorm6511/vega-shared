@@ -23,6 +23,17 @@ prefers (windowed vs. one wide range) and still sets its own gap
 tolerances — this package doesn't force the two apps to agree on
 tuning, only on the mechanics.
 
+`calcRet` also rejects any computed return whose magnitude exceeds
+`DEFAULT_MAX_ABS_RETURN_PCT` (5000%, overridable per call via
+`ReturnPeriodConfig.maxAbsReturnPct`), returning null instead. Added
+2026-08-18 after vega-fms's Rebalance tab showed Rheinmetall (RHM) 1D%
+= +106,293% — traced to a single wrong-instrument price sitting in
+`instrument_prices` under ticker "RHM" (a bad Yahoo ticker-resolution
+collision, upstream in `sync_instruments.py` — a separate fix, not yet
+made). This bound exists so a bug LIKE that one can never render as a
+confidently-wrong number again, regardless of which upstream process
+causes the next one.
+
 `dist/` is the compiled, committed output (plain CommonJS + `.d.ts`), so
 consumers don't need this package's own devDependencies (TypeScript) to
 install it. It's also rebuilt automatically on install via a `prepare`

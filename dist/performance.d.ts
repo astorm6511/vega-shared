@@ -65,14 +65,30 @@ export declare function nearestOnOrBefore(datesAsc: string[], target: string, ma
  * against comparing a value against itself (see `calcRet`). */
 export declare function priceAt(series: PriceSeries | undefined, target: string, maxGapDays: number): PricePoint;
 /**
- * Percentage return from `hist` to `cur`. Returns null when either price
- * is missing, when `hist` is zero, or when `cur`/`hist` resolved to the
- * exact same underlying date row (see module docstring) — a textually
- * different date with a coincidentally identical close_price still
- * returns a real 0, since that's an actual (if unusual) zero-movement
- * day, not a resolution collision.
+ * A single-listed-equity return whose magnitude exceeds this is far more
+ * likely to be bad data (wrong-ticker collision, a decimal/unit mismatch,
+ * a stray placeholder price) than a real move — even the most extreme
+ * real single-day/week/month/YTD swings for a live, liquid listing don't
+ * get near 50x. Confirmed against production data: 2026-08-18, vega-fms's
+ * Rebalance tab showed Rheinmetall (RHM) 1D% = +106,293%, traced to
+ * instrument_prices having exactly one row for ticker "RHM" (2026-08-12,
+ * close_price 1.145) — a wrong-instrument price fetched under a bad
+ * Yahoo ticker resolution, sitting just inside the 1D leg's gap
+ * tolerance. That underlying data bug is a separate, upstream fix; this
+ * bound exists so a bug LIKE it can never render as a confidently wrong
+ * number again, regardless of which upstream process caused it.
  */
-export declare function calcRet(cur: number | null, curDate: string | null, hist: number | null, histDate: string | null): number | null;
+export declare const DEFAULT_MAX_ABS_RETURN_PCT = 5000;
+/**
+ * Percentage return from `hist` to `cur`. Returns null when either price
+ * is missing, when `hist` is zero, when `cur`/`hist` resolved to the
+ * exact same underlying date row (see module docstring — a textually
+ * different date with a coincidentally identical close_price still
+ * returns a real 0, since that's an actual, if unusual, zero-movement
+ * day, not a resolution collision), or when the computed magnitude
+ * exceeds `maxAbsPct` (see DEFAULT_MAX_ABS_RETURN_PCT above).
+ */
+export declare function calcRet(cur: number | null, curDate: string | null, hist: number | null, histDate: string | null, maxAbsPct?: number): number | null;
 /**
  * Build a per-ticker { sorted dates, date->close_price } index from raw
  * instrument_prices rows. Both vega-pms and vega-fms fetch this table
@@ -102,6 +118,8 @@ export type ReturnPeriodConfig = {
     d7MaxGapDays: number;
     d1mMaxGapDays: number;
     ytdMaxGapDays: number;
+    /** Overrides DEFAULT_MAX_ABS_RETURN_PCT for every leg computed here. */
+    maxAbsReturnPct?: number;
 };
 /**
  * Computes the four standard rebalance-tab return columns for one

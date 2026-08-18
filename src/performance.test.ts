@@ -104,6 +104,33 @@ test("buildPriceIndex + priceAt reproduce the 2026-08-17 stale-duplicate inciden
   assert.equal(periods.perf_1d, null);
 });
 
+test("calcRet rejects an implausible magnitude instead of returning a confident garbage number", () => {
+  // Reproduces the real RHM incident (vega-fms Rebalance tab, 2026-08-18):
+  // instrument_prices had exactly one row for ticker "RHM" -- 2026-08-12,
+  // close_price 1.145 -- a wrong-instrument price fetched under a bad
+  // Yahoo ticker resolution, sitting just inside the 1D leg's 5-day gap
+  // tolerance. cur=1218.20 (the real, correct current price) vs
+  // hist=1.145 (the garbage row) produced a genuine +106,293% before this
+  // guard existed.
+  const cur = 1218.2;
+  const hist = 1.145;
+  const rawPct = ((cur - hist) / hist) * 100;
+  assert.ok(rawPct > 100_000); // sanity: this really is the huge number
+  assert.equal(calcRet(cur, "2026-08-18", hist, "2026-08-12"), null);
+});
+
+test("calcRet still allows a large but plausible move through the default bound", () => {
+  // A stock tripling (+200%) or falling 90% (-90%) are real, if rare,
+  // events -- DEFAULT_MAX_ABS_RETURN_PCT must not clip those.
+  assert.equal(calcRet(300, "2026-08-18", 100, "2026-08-17"), 200);
+  assert.equal(calcRet(10, "2026-08-18", 100, "2026-08-17"), -90);
+});
+
+test("calcRet's magnitude bound is overridable per call", () => {
+  assert.equal(calcRet(1000, "2026-08-18", 100, "2026-08-17", 500), null);
+  assert.equal(calcRet(1000, "2026-08-18", 100, "2026-08-17", 2000), 900);
+});
+
 test("computeReturnPeriods with no series at all returns all nulls, not a throw", () => {
   const periods = computeReturnPeriods(undefined, {
     today: "2026-08-17",
