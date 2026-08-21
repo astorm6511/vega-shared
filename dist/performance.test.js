@@ -113,6 +113,37 @@ const performance_1 = require("./performance");
     strict_1.default.equal((0, performance_1.calcRet)(1000, "2026-08-18", 100, "2026-08-17", 500), null);
     strict_1.default.equal((0, performance_1.calcRet)(1000, "2026-08-18", 100, "2026-08-17", 2000), 900);
 });
+(0, node_test_1.test)("computeReturnPeriods anchors 1D/7D/1M on the resolved current date, not the nominal 'today', when the price sync lags behind the as-at date", () => {
+    // Reproduces the real vega-pms incident (account 1912047, 2026-08-20/21):
+    // the account's "Positions as at" date was 2026-08-20, but the Yahoo
+    // price sync (an independent daily job) hadn't produced a 2026-08-20 row
+    // yet -- its latest close was still 2026-08-19. Anchoring d1's target on
+    // cfg.today (08-20) made it resolve to isoDaysAgo(08-20, 1) = 08-19 --
+    // the SAME row `cur` had already resolved to (nearest-on-or-before 08-20
+    // is also 08-19) -- so the same-date guard fired and 1D% showed null
+    // every time the sync was a day behind, which in practice was most of
+    // the time. It should instead measure the two most recent *distinct*
+    // trading closes actually on file (08-19 vs 08-18).
+    const rows = [
+        { ticker: "GOOG", price_date: "2026-08-17", close_price: 341.45 },
+        { ticker: "GOOG", price_date: "2026-08-18", close_price: 341.28 },
+        { ticker: "GOOG", price_date: "2026-08-19", close_price: 341.70 },
+        // No 2026-08-20 row yet -- the sync hasn't caught up.
+    ];
+    const series = (0, performance_1.buildPriceIndex)(rows).get("GOOG");
+    const cfg = {
+        today: "2026-08-20",
+        curMaxGapDays: 5,
+        d1MaxGapDays: 5,
+        d7MaxGapDays: 5,
+        d1mMaxGapDays: 7,
+        ytdMaxGapDays: 10,
+    };
+    const periods = (0, performance_1.computeReturnPeriods)(series, cfg);
+    const expected = ((341.70 - 341.28) / 341.28) * 100;
+    strict_1.default.ok(periods.perf_1d != null);
+    strict_1.default.ok(Math.abs(periods.perf_1d - expected) < 1e-9);
+});
 (0, node_test_1.test)("computeReturnPeriods with no series at all returns all nulls, not a throw", () => {
     const periods = (0, performance_1.computeReturnPeriods)(undefined, {
         today: "2026-08-17",

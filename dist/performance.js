@@ -162,14 +162,34 @@ function buildPriceIndex(rows) {
  * vega-pms source-mismatch bug this module also closes off.
  */
 function computeReturnPeriods(series, cfg) {
-    var _a;
+    var _a, _b;
     const cur = priceAt(series, cfg.today, cfg.curMaxGapDays);
-    const d1 = priceAt(series, isoDaysAgo(cfg.today, 1), cfg.d1MaxGapDays);
-    const d7 = priceAt(series, isoDaysAgo(cfg.today, 7), cfg.d7MaxGapDays);
-    const d1m = priceAt(series, isoDaysAgo(cfg.today, 30), cfg.d1mMaxGapDays);
+    // Anchor the historical legs on the date `cur` actually resolved to, not
+    // on the nominal cfg.today. cfg.today is normally the book's "Positions
+    // as at" date, but the Yahoo price sync that feeds `series` routinely
+    // lags a calendar day (or more) behind that date -- it runs on its own
+    // schedule, independent of the custodian position load. With the old
+    // "always relative to cfg.today" anchor, that lag meant priceAt(today-1)
+    // and priceAt(today) resolved to the SAME latest-available row every
+    // time the sync was exactly one day behind, which is the common case,
+    // not an edge case. calcRet's same-date guard then correctly refused to
+    // report that as a real move, so 1D% rendered "--" for the entire book
+    // any time the sync hadn't yet caught up to the as-at date -- which in
+    // practice was most of the time, defeating the column's purpose (show
+    // the most recent real one-day move as of the as-at date). Anchoring on
+    // cur.date instead means the 1D/7D/1M legs are always measured between
+    // two *actually distinct* trading closes -- the latest one on or before
+    // the as-at date, and the one before that -- rather than requiring the
+    // sync to be perfectly current before showing anything at all. YTD's
+    // target is a fixed calendar date (Jan 1) so it keeps using cfg.today's
+    // year directly; only the day-count-relative legs need the anchor fix.
+    const anchor = (_a = cur.date) !== null && _a !== void 0 ? _a : cfg.today;
+    const d1 = priceAt(series, isoDaysAgo(anchor, 1), cfg.d1MaxGapDays);
+    const d7 = priceAt(series, isoDaysAgo(anchor, 7), cfg.d7MaxGapDays);
+    const d1m = priceAt(series, isoDaysAgo(anchor, 30), cfg.d1mMaxGapDays);
     const ytdTarget = `${new Date(cfg.today).getFullYear()}-01-01`;
     const ytd = priceAt(series, ytdTarget, cfg.ytdMaxGapDays);
-    const maxAbsPct = (_a = cfg.maxAbsReturnPct) !== null && _a !== void 0 ? _a : exports.DEFAULT_MAX_ABS_RETURN_PCT;
+    const maxAbsPct = (_b = cfg.maxAbsReturnPct) !== null && _b !== void 0 ? _b : exports.DEFAULT_MAX_ABS_RETURN_PCT;
     return {
         perf_1d: calcRet(cur.price, cur.date, d1.price, d1.date, maxAbsPct),
         perf_7d: calcRet(cur.price, cur.date, d7.price, d7.date, maxAbsPct),
